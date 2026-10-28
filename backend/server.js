@@ -21,13 +21,11 @@ app.use(express.json());
 
 // PostgreSQL connection
 const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: Number(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
 });
-
 pool.on("error", (err) => {
   console.error("Unexpected PostgreSQL error:", err.message);
 });
@@ -143,6 +141,15 @@ app.post("/api/contact", async (req, res) => {
     });
   }
 });
+
+// Start server
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
 
 // Start server
 app.listen(PORT, () => {
