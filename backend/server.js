@@ -26,6 +26,7 @@ const pool = new Pool({
     rejectUnauthorized: false,
   },
 });
+
 pool.on("error", (err) => {
   console.error("Unexpected PostgreSQL error:", err.message);
 });
@@ -59,7 +60,6 @@ app.post("/api/appointments", async (req, res) => {
   }
 
   try {
-    // Save appointment in PostgreSQL
     const result = await pool.query(
       `INSERT INTO appointments
        (name, email, phone, service, appointment_date, message)
@@ -70,7 +70,8 @@ app.post("/api/appointments", async (req, res) => {
 
     const appointmentId = result.rows[0].id;
 
-    // Send email to clinic owner
+    let emailSent = false;
+
     try {
       await emailTransporter.sendMail({
         from: process.env.EMAIL_USER,
@@ -89,29 +90,27 @@ Message: ${message || "No additional message"}
         `,
       });
 
+      emailSent = true;
       console.log("Appointment notification email sent.");
     } catch (emailError) {
-      console.error(
-        "Appointment saved, but email failed:",
-        emailError.message
-      );
+      console.error("Appointment email failed:", emailError.message);
     }
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "Appointment request saved successfully!",
       id: appointmentId,
-      emailNotification: "Check backend terminal for email status.",
+      emailNotification: emailSent ? "Sent" : "Failed",
     });
   } catch (err) {
     console.error("Appointment save failed:", err.message);
 
-    res.status(500).json({
+    return res.status(500).json({
       message: "Could not save appointment. Please try again.",
     });
   }
 });
 
-// Save contact message
+// Save contact message and send email notification
 app.post("/api/contact", async (req, res) => {
   const { name, email, message } = req.body;
 
@@ -129,20 +128,46 @@ app.post("/api/contact", async (req, res) => {
       [name, email, message]
     );
 
-    res.status(201).json({
+    const messageId = result.rows[0].id;
+
+    let emailSent = false;
+
+    try {
+      await emailTransporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: "contact.khurram1@gmail.com",
+        subject: "New Chiropractic Contact Message",
+        text: `
+New contact message
+
+Message ID: ${messageId}
+Name: ${name}
+Email: ${email}
+Message: ${message}
+        `,
+      });
+
+      emailSent = true;
+      console.log("Contact message notification email sent.");
+    } catch (emailError) {
+      console.error("Contact message email failed:", emailError.message);
+    }
+
+    return res.status(201).json({
       message: "Contact message saved successfully!",
-      id: result.rows[0].id,
+      id: messageId,
+      emailNotification: emailSent ? "Sent" : "Failed",
     });
   } catch (err) {
     console.error("Contact message save failed:", err.message);
 
-    res.status(500).json({
+    return res.status(500).json({
       message: "Could not save message. Please try again.",
     });
   }
 });
 
-// Start server
+// Start a local server only; Vercel imports the exported app
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
@@ -150,8 +175,3 @@ if (require.main === module) {
 }
 
 module.exports = app;
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-});
